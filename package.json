@@ -85,6 +85,12 @@
         "icon": "$(key)"
       },
       {
+        "command": "multirepoStudio.searchAndReplace",
+        "title": "Search & Replace Across Repos",
+        "category": "MultiRepo Studio",
+        "icon": "$(search-replace)"
+      },
+      {
         "command": "multirepoStudio.retryFailedMRs",
         "title": "Retry Failed Merge Requests",
         "category": "MultiRepo Studio",
@@ -147,6 +153,11 @@
         },
         {
           "command": "multirepoStudio.publishChangeSet",
+          "when": "view == multirepoStudio.repositories",
+          "group": "navigation"
+        },
+        {
+          "command": "multirepoStudio.searchAndReplace",
           "when": "view == multirepoStudio.repositories",
           "group": "navigation"
         },
