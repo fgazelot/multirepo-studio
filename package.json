@@ -1,0 +1,167 @@
+{
+  "name": "multirepo-studio",
+  "displayName": "MultiRepo Studio",
+  "description": "Orchestrate cross-repository changes on GitLab from a single VS Code workspace.",
+  "version": "0.1.0",
+  "publisher": "fgazelot",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "SCM Providers",
+    "Other"
+  ],
+  "keywords": [
+    "gitlab",
+    "multi-repo",
+    "monorepo",
+    "merge-request",
+    "devops",
+    "infrastructure-as-code"
+  ],
+  "activationEvents": [
+    "workspaceFolders"
+  ],
+  "main": "./out/extension.js",
+  "icon": "resources/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fgazelot/multirepo-studio"
+  },
+  "sponsor": {
+    "url": "https://buymeacoffee.com/fgazelot"
+  },
+  "badges": [
+    {
+      "url": "https://img.shields.io/badge/Sponsor-Buy%20me%20a%20coffee-orange",
+      "href": "https://buymeacoffee.com/fgazelot",
+      "description": "Buy me a coffee"
+    }
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "multirepo-studio",
+          "title": "MultiRepo Studio",
+          "icon": "resources/sidebar-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "multirepo-studio": [
+        {
+          "id": "multirepoStudio.repositories",
+          "name": "Repositories"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "multirepoStudio.refresh",
+        "title": "Refresh Repositories",
+        "category": "MultiRepo Studio",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "multirepoStudio.publishChangeSet",
+        "title": "Publish Change Set",
+        "category": "MultiRepo Studio",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "multirepoStudio.configureGitLab",
+        "title": "Configure GitLab Token",
+        "category": "MultiRepo Studio",
+        "icon": "$(key)"
+      },
+      {
+        "command": "multirepoStudio.retryFailedMRs",
+        "title": "Retry Failed Merge Requests",
+        "category": "MultiRepo Studio",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "multirepoStudio.switchAllToDefault",
+        "title": "Switch All to Default Branch",
+        "category": "MultiRepo Studio",
+        "icon": "$(home)"
+      }
+    ],
+    "configuration": {
+      "title": "MultiRepo Studio",
+      "properties": {
+        "multirepoStudio.notificationTemplate.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable post-publish notification message generation (copied to clipboard)."
+        },
+        "multirepoStudio.notificationTemplate.template": {
+          "type": "string",
+          "default": "[{repo}]\n{description}\n{mrUrl}\n\nTemps de relecture :hourglass_flowing_sand: : {reviewTime}\nNombre de relecture :white_check_mark: : {reviewCount}",
+          "description": "Template for the notification message. Available variables: {repo}, {mrUrl}, {mrIid}, {description}, {reviewTime}, {reviewCount}. Slack emoji codes like :hourglass_flowing_sand: are supported.",
+          "editPresentation": "multilineText"
+        },
+        "multirepoStudio.notificationTemplate.separator": {
+          "type": "string",
+          "default": "\n\n---\n\n",
+          "description": "Separator between repository entries when multiple repos are published."
+        },
+        "multirepoStudio.notificationTemplate.promptReviewTime": {
+          "type": "boolean",
+          "default": true,
+          "description": "Prompt for estimated review time during Change Set creation."
+        },
+        "multirepoStudio.notificationTemplate.promptReviewCount": {
+          "type": "boolean",
+          "default": true,
+          "description": "Prompt for number of reviewers needed during Change Set creation."
+        },
+        "multirepoStudio.notificationTemplate.defaultReviewTime": {
+          "type": "string",
+          "default": "5m",
+          "description": "Default value for review time."
+        },
+        "multirepoStudio.notificationTemplate.defaultReviewCount": {
+          "type": "string",
+          "default": "1",
+          "description": "Default value for number of reviewers."
+        }
+      }
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "multirepoStudio.refresh",
+          "when": "view == multirepoStudio.repositories",
+          "group": "navigation"
+        },
+        {
+          "command": "multirepoStudio.publishChangeSet",
+          "when": "view == multirepoStudio.repositories",
+          "group": "navigation"
+        },
+        {
+          "command": "multirepoStudio.switchAllToDefault",
+          "when": "view == multirepoStudio.repositories",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src/",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.2.0",
+    "eslint": "^9.0.0",
+    "typescript": "^5.7.0"
+  }
+}
