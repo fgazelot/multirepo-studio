@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0 (2026-07-15)
+
+- **GitHub support**: create Pull Requests on GitHub repositories alongside GitLab Merge Requests
+- Auto-detection of platform (GitHub/GitLab) from each repository's remote URL
+- Mix GitHub and GitLab repos in the same workspace
+- New command: **Configure GitHub Token**
+
 ## 0.1.0 (2026-07-15)
 
 Initial release.

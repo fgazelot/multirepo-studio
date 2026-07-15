@@ -3,13 +3,15 @@ import { RepositoryTreeProvider } from './services/treeView';
 import { WorkspaceService } from './services/workspaceService';
 import { GitService } from './services/gitService';
 import { GitLabService } from './services/gitLabService';
+import { GitHubService } from './services/gitHubService';
 import { ChangeSetService } from './services/changeSetService';
 
 export function activate(context: vscode.ExtensionContext) {
 	const workspaceService = new WorkspaceService();
 	const gitService = new GitService();
 	const gitLabService = new GitLabService(context);
-	const changeSetService = new ChangeSetService(gitService, gitLabService, workspaceService);
+	const gitHubService = new GitHubService(context);
+	const changeSetService = new ChangeSetService(gitService, [gitLabService, gitHubService], workspaceService);
 
 	const treeProvider = new RepositoryTreeProvider(workspaceService, gitService);
 	const treeView = vscode.window.createTreeView('multirepoStudio.repositories', {
@@ -29,6 +31,10 @@ export function activate(context: vscode.ExtensionContext) {
 
 		vscode.commands.registerCommand('multirepoStudio.configureGitLab', () => {
 			gitLabService.configureToken();
+		}),
+
+		vscode.commands.registerCommand('multirepoStudio.configureGitHub', () => {
+			gitHubService.configureToken();
 		}),
 
 		vscode.commands.registerCommand('multirepoStudio.retryFailedMRs', () => {

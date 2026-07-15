@@ -1,8 +1,8 @@
 {
   "name": "multirepo-studio",
   "displayName": "MultiRepo Studio",
-  "description": "Orchestrate cross-repository changes on GitLab from a single VS Code workspace.",
-  "version": "0.1.0",
+  "description": "Orchestrate cross-repository changes on GitHub and GitLab from a single VS Code workspace.",
+  "version": "0.2.0",
   "publisher": "fgazelot",
   "license": "MIT",
   "engines": {
@@ -14,9 +14,11 @@
   ],
   "keywords": [
     "gitlab",
+    "github",
     "multi-repo",
     "monorepo",
     "merge-request",
+    "pull-request",
     "devops",
     "infrastructure-as-code"
   ],
@@ -73,6 +75,12 @@
       {
         "command": "multirepoStudio.configureGitLab",
         "title": "Configure GitLab Token",
+        "category": "MultiRepo Studio",
+        "icon": "$(key)"
+      },
+      {
+        "command": "multirepoStudio.configureGitHub",
+        "title": "Configure GitHub Token",
         "category": "MultiRepo Studio",
         "icon": "$(key)"
       },
