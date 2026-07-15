@@ -1,5 +1,9 @@
 # MultiRepo Studio
 
+[![CI](https://github.com/fgazelot/multirepo-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/fgazelot/multirepo-studio/actions/workflows/ci.yml)
+[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/fgazelot.multirepo-studio)](https://marketplace.visualstudio.com/items?itemName=fgazelot.multirepo-studio)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 **Orchestrate cross-repository changes on GitLab from a single VS Code workspace.**
 
 When a change spans multiple repositories (version upgrade, Ansible variable, Terraform module, Helm chart...), you normally have to: open each repo, create a branch, make the change, commit, push, create a Merge Request. Repeat for every repo.
