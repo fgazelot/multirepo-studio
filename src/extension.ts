@@ -83,6 +83,155 @@ export function activate(context: vscode.ExtensionContext) {
 			changeSetService.switchAllToDefault();
 		}),
 
+		vscode.commands.registerCommand('multirepoStudio.discardChanges', async () => {
+			const repos = workspaceService.getRepositories();
+			if (repos.length === 0) {
+				vscode.window.showWarningMessage('No Git repositories found in this workspace.');
+				return;
+			}
+
+			const dirtyRepos: { repo: RepoInfo; changedFiles: number; branch: string }[] = [];
+			for (const repo of repos) {
+				const status = await gitService.getStatus(repo.path);
+				if (status.isDirty) {
+					dirtyRepos.push({ repo, changedFiles: status.changedFiles, branch: status.branch });
+				}
+			}
+
+			if (dirtyRepos.length === 0) {
+				vscode.window.showInformationMessage('All repositories are clean. Nothing to discard.');
+				return;
+			}
+
+			const details = dirtyRepos.map(r =>
+				`  • ${r.repo.group ? r.repo.group + '/' : ''}${r.repo.name} — ${r.changedFiles} file(s) on ${r.branch}`
+			).join('\n');
+
+			const choice = await vscode.window.showQuickPick(
+				[
+					{
+						label: '$(trash) Discard all changes',
+						description: `Reset ${dirtyRepos.length} repo(s) to clean state`,
+						value: 'discard' as const,
+					},
+					{
+						label: '$(git-branch) Save to a new branch first',
+						description: 'Commit changes to a new branch, then switch back',
+						value: 'save' as const,
+					},
+				],
+				{
+					title: `${dirtyRepos.length} repo(s) have uncommitted changes`,
+					placeHolder: details,
+				},
+			);
+
+			if (!choice) { return; }
+
+			if (choice.value === 'save') {
+				const branchName = await vscode.window.showInputBox({
+					title: 'Save changes to branch',
+					prompt: 'Branch name for saving the current changes',
+					placeHolder: 'e.g. backup/wip-changes',
+					ignoreFocusOut: true,
+				});
+				if (!branchName) { return; }
+
+				const commitMessage = await vscode.window.showInputBox({
+					title: 'Commit message',
+					prompt: 'Message for the backup commit',
+					value: 'wip: save uncommitted changes',
+					ignoreFocusOut: true,
+				});
+				if (!commitMessage) { return; }
+
+				const confirm = await vscode.window.showInformationMessage(
+					`Save changes from ${dirtyRepos.length} repo(s) to branch "${branchName}", then switch back to current branch?`,
+					{ modal: true, detail: details },
+					'Save & Switch Back',
+				);
+				if (confirm !== 'Save & Switch Back') { return; }
+
+				type SaveResult = { name: string; success: boolean; originalBranch: string; error?: string };
+				const results: SaveResult[] = [];
+
+				await vscode.window.withProgress(
+					{ location: vscode.ProgressLocation.Notification, title: 'Saving changes...' },
+					async (progress) => {
+						for (const { repo, branch } of dirtyRepos) {
+							progress.report({ message: repo.name });
+							try {
+								await gitService.switchCreateBranch(repo.path, branchName);
+								await gitService.addAll(repo.path);
+								await gitService.commit(repo.path, commitMessage);
+								await gitService.switchBack(repo.path, branch);
+								results.push({ name: repo.name, success: true, originalBranch: branch });
+							} catch (err) {
+								const msg = err instanceof Error ? err.message : String(err);
+								results.push({ name: repo.name, success: false, originalBranch: branch, error: msg });
+							}
+						}
+					},
+				);
+
+				const ok = results.filter(r => r.success);
+				const ko = results.filter(r => !r.success);
+
+				const panel = vscode.window.createOutputChannel('MultiRepo Studio');
+				panel.clear();
+				panel.appendLine(`Saved changes to branch "${branchName}"\n`);
+				if (ok.length > 0) {
+					panel.appendLine(`✓ ${ok.length} saved and switched back:`);
+					for (const r of ok) { panel.appendLine(`  ${r.name} → back on ${r.originalBranch}`); }
+				}
+				if (ko.length > 0) {
+					panel.appendLine(`\n✗ ${ko.length} failed:`);
+					for (const r of ko) { panel.appendLine(`  ${r.name} — ${r.error}`); }
+				}
+				panel.appendLine(`\nTo recover: git switch ${branchName}`);
+				panel.show();
+
+				vscode.window.showInformationMessage(`${ok.length} repo(s) saved to "${branchName}" and switched back.`);
+			} else {
+				const confirm = await vscode.window.showWarningMessage(
+					`Discard ALL uncommitted changes in ${dirtyRepos.length} repo(s)? This cannot be undone.`,
+					{ modal: true, detail: details },
+					'Discard All',
+				);
+				if (confirm !== 'Discard All') { return; }
+
+				type DiscardResult = { name: string; success: boolean; error?: string };
+				const results: DiscardResult[] = [];
+
+				await vscode.window.withProgress(
+					{ location: vscode.ProgressLocation.Notification, title: 'Discarding changes...' },
+					async (progress) => {
+						for (const { repo } of dirtyRepos) {
+							progress.report({ message: repo.name });
+							try {
+								await gitService.discardChanges(repo.path);
+								results.push({ name: repo.name, success: true });
+							} catch (err) {
+								const msg = err instanceof Error ? err.message : String(err);
+								results.push({ name: repo.name, success: false, error: msg });
+							}
+						}
+					},
+				);
+
+				const ok = results.filter(r => r.success);
+				const ko = results.filter(r => !r.success);
+
+				if (ko.length > 0) {
+					vscode.window.showWarningMessage(`${ok.length} discarded, ${ko.length} failed.`);
+				} else {
+					vscode.window.showInformationMessage(`${ok.length} repo(s) cleaned.`);
+				}
+			}
+
+			treeProvider.refresh();
+		}),
+
 		vscode.commands.registerCommand('multirepoStudio.searchAndReplace', async () => {
 			const selectedRepos = await pickRepos();
 			if (!selectedRepos) { return; }

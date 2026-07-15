@@ -8,7 +8,7 @@ interface ChangeSet {
 	commitMessage: string;
 	mrTitle: string;
 	mrDescription: string;
-	targetBranch: string;
+	targetBranchOverride: string | null;
 	notificationDescription: string;
 	reviewTime: string;
 	reviewCount: string;
@@ -376,12 +376,13 @@ export class ChangeSetService {
 
 					const type = detectPlatform(remoteUrl);
 					const platform = this.getPlatform(type);
+					const targetBranch = changeSet.targetBranchOverride || await this.git.getDefaultBranch(prev.repo.path);
 
 					try {
 						const pr = await platform.createPullRequest(
 							remoteUrl,
 							changeSet.branchName,
-							changeSet.targetBranch,
+							targetBranch,
 							changeSet.mrTitle,
 							changeSet.mrDescription,
 						);
@@ -455,13 +456,14 @@ export class ChangeSetService {
 		});
 		if (mrDescription === undefined) { return undefined; }
 
-		const targetBranch = await vscode.window.showInputBox({
+		const targetBranchInput = await vscode.window.showInputBox({
 			title: `Change Set — Target Branch (${++step}/${totalSteps})`,
-			prompt: 'Target branch for the Pull/Merge Requests',
-			value: 'main',
+			prompt: 'Leave "auto" to detect each repo\'s default branch (main/master), or type a branch name to override all',
+			value: 'auto',
 			ignoreFocusOut: true,
 		});
-		if (!targetBranch) { return undefined; }
+		if (targetBranchInput === undefined) { return undefined; }
+		const targetBranchOverride = targetBranchInput === 'auto' || targetBranchInput === '' ? null : targetBranchInput;
 
 		let notificationDescription = title;
 		let reviewTime = notifConfig.defaultReviewTime;
@@ -507,7 +509,7 @@ export class ChangeSetService {
 			commitMessage,
 			mrTitle: title,
 			mrDescription: mrDescription || title,
-			targetBranch,
+			targetBranchOverride,
 			notificationDescription,
 			reviewTime,
 			reviewCount,
@@ -516,7 +518,8 @@ export class ChangeSetService {
 
 	private async confirmPublish(repos: RepoInfo[], changeSet: ChangeSet): Promise<boolean> {
 		const summary = repos.map(r => `  • ${r.name}`).join('\n');
-		const message = `Publish Change Set to ${repos.length} repo(s)?\n\n${summary}\n\nBranch: ${changeSet.branchName}\nTarget: ${changeSet.targetBranch}`;
+		const targetLabel = changeSet.targetBranchOverride || 'auto (per repo)';
+		const message = `Publish Change Set to ${repos.length} repo(s)?\n\n${summary}\n\nBranch: ${changeSet.branchName}\nTarget: ${targetLabel}`;
 
 		const result = await vscode.window.showInformationMessage(
 			message,
@@ -601,12 +604,13 @@ export class ChangeSetService {
 
 		const type = detectPlatform(remoteUrl);
 		const platform = this.getPlatform(type);
+		const targetBranch = changeSet.targetBranchOverride || await this.git.getDefaultBranch(repo.path);
 
 		try {
 			const pr = await platform.createPullRequest(
 				remoteUrl,
 				changeSet.branchName,
-				changeSet.targetBranch,
+				targetBranch,
 				changeSet.mrTitle,
 				changeSet.mrDescription,
 			);
