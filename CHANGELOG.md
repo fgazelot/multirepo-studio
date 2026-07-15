@@ -6,6 +6,8 @@
 - Auto-detection of platform (GitHub/GitLab) from each repository's remote URL
 - Mix GitHub and GitLab repos in the same workspace
 - New command: **Configure GitHub Token**
+- **Search & Replace Across Repos**: find a string across all repositories, preview matches, replace everywhere
+- New command: **Search & Replace Across Repos** (also available in sidebar toolbar)
 
 ## 0.1.0 (2026-07-15)
 

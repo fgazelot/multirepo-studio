@@ -39,6 +39,10 @@ Repositories are displayed in the sidebar, grouped by parent folder (product lin
 
 Configure a message template that gets copied to your clipboard after publishing. Paste it in Slack, Teams, or Discord to notify your team. Fully customizable with variables: `{repo}`, `{mrUrl}`, `{mrIid}`, `{description}`, `{reviewTime}`, `{reviewCount}`.
 
+### Search & Replace Across Repos
+
+Find a variable, version, or any string across all your repositories. See exactly where it appears (repo, file, line), then replace it everywhere with one confirmation. The modified files are ready for **Publish Change Set**.
+
 ### Error Handling
 
 - Distinguishes between git failures and PR/MR creation failures
@@ -67,6 +71,7 @@ Tokens are stored securely in your OS keychain via VS Code's SecretStorage API.
 
 | Command | Description |
 |---------|-------------|
+| **Search & Replace Across Repos** | Find and replace a string across all repositories |
 | **Publish Change Set** | Create branches, commit, push, and open PRs/MRs on all modified repos |
 | **Switch All to Default Branch** | Reset all repos to their default branch (auto-stash) |
 | **Refresh Repositories** | Manually refresh the repository list |
@@ -111,6 +116,7 @@ Nombre de relecture :white_check_mark: : {reviewCount}
 ## Roadmap
 
 - [x] GitHub support
+- [x] Search & Replace across repos
 - [ ] MR/PR dashboard with pipeline status
 - [ ] Draft Pull/Merge Requests
 - [ ] Automatic reviewers
