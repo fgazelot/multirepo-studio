@@ -4,17 +4,24 @@
 [![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/fgazelot.multirepo-studio)](https://marketplace.visualstudio.com/items?itemName=fgazelot.multirepo-studio)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**Orchestrate cross-repository changes on GitLab from a single VS Code workspace.**
+**Orchestrate cross-repository changes on GitHub and GitLab from a single VS Code workspace.**
 
-When a change spans multiple repositories (version upgrade, Ansible variable, Terraform module, Helm chart...), you normally have to: open each repo, create a branch, make the change, commit, push, create a Merge Request. Repeat for every repo.
+When a change spans multiple repositories (version upgrade, Ansible variable, Terraform module, Helm chart...), you normally have to: open each repo, create a branch, make the change, commit, push, create a Pull/Merge Request. Repeat for every repo.
 
 MultiRepo Studio reduces this to **one action**. You work in a standard VS Code Multi Root Workspace, modify your files across repos, and click **Publish Change Set**. The extension handles everything else.
+
+## Supported Platforms
+
+- **GitHub** — Pull Requests via REST API
+- **GitLab** — Merge Requests via REST API (including self-hosted instances)
+
+The platform is auto-detected from each repository's remote URL. You can mix GitHub and GitLab repos in the same workspace.
 
 ## Features
 
 ### Publish Change Set
 
-One command to rule them all. Enter your branch name, commit message, and MR details once — the extension creates branches, commits, pushes, and opens GitLab Merge Requests across all modified repositories in parallel.
+One command to rule them all. Enter your branch name, commit message, and PR/MR details once — the extension creates branches, commits, pushes, and opens Pull/Merge Requests across all modified repositories in parallel.
 
 ### Smart Detection
 
@@ -34,8 +41,8 @@ Configure a message template that gets copied to your clipboard after publishing
 
 ### Error Handling
 
-- Distinguishes between git failures and MR creation failures
-- Retry MR creation without re-pushing
+- Distinguishes between git failures and PR/MR creation failures
+- Retry PR/MR creation without re-pushing
 - Automatic stash on branch switch
 - Pre-publish safety checks (conflicts, rebase, detached HEAD)
 
@@ -43,23 +50,29 @@ Configure a message template that gets copied to your clipboard after publishing
 
 1. Install the extension from the VS Code Marketplace
 2. Open a folder containing multiple Git repositories (or use a Multi Root Workspace)
-3. Configure your GitLab token: `Ctrl+Shift+P` → **MultiRepo Studio: Configure GitLab Token**
+3. Configure your token:
+   - **GitHub**: `Ctrl+Shift+P` → **MultiRepo Studio: Configure GitHub Token**
+   - **GitLab**: `Ctrl+Shift+P` → **MultiRepo Studio: Configure GitLab Token**
 4. Modify files across your repos
 5. `Ctrl+Shift+P` → **MultiRepo Studio: Publish Change Set**
 
-### GitLab Token
+### Tokens
 
-You need a GitLab Personal Access Token with the `api` scope. The token is stored securely in your OS keychain via VS Code's SecretStorage API.
+- **GitHub**: Personal Access Token with `repo` scope
+- **GitLab**: Personal Access Token with `api` scope
+
+Tokens are stored securely in your OS keychain via VS Code's SecretStorage API.
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| **Publish Change Set** | Create branches, commit, push, and open MRs on all modified repos |
+| **Publish Change Set** | Create branches, commit, push, and open PRs/MRs on all modified repos |
 | **Switch All to Default Branch** | Reset all repos to their default branch (auto-stash) |
 | **Refresh Repositories** | Manually refresh the repository list |
+| **Configure GitHub Token** | Store your GitHub PAT securely |
 | **Configure GitLab Token** | Store your GitLab PAT securely |
-| **Retry Failed Merge Requests** | Retry MR creation for repos that were pushed but MR failed |
+| **Retry Failed Merge Requests** | Retry PR/MR creation for repos that were pushed but PR/MR failed |
 
 ## Settings
 
@@ -97,12 +110,12 @@ Nombre de relecture :white_check_mark: : {reviewCount}
 
 ## Roadmap
 
-- [ ] MR dashboard with pipeline status
-- [ ] Draft Merge Requests
+- [x] GitHub support
+- [ ] MR/PR dashboard with pipeline status
+- [ ] Draft Pull/Merge Requests
 - [ ] Automatic reviewers
 - [ ] Labels
 - [ ] Change Set history
-- [ ] GitHub support
 - [ ] Bitbucket support
 
 ## Support

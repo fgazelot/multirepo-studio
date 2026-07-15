@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { GitService } from './gitService';
-import { GitLabService } from './gitLabService';
+import { PlatformService, PlatformType, detectPlatform } from './platformService';
 import { WorkspaceService, RepoInfo } from './workspaceService';
 
 interface ChangeSet {
@@ -31,6 +31,7 @@ interface RepoResult {
 	status: RepoResultStatus;
 	mrUrl?: string;
 	mrIid?: number;
+	platform?: PlatformType;
 	error?: string;
 }
 
@@ -39,12 +40,30 @@ const DEFAULT_BRANCHES = ['main', 'master', 'develop'];
 export class ChangeSetService {
 	private lastFailedMrResults: RepoResult[] = [];
 	private lastChangeSet: ChangeSet | undefined;
+	private platforms: Map<PlatformType, PlatformService>;
 
 	constructor(
 		private readonly git: GitService,
-		private readonly gitLab: GitLabService,
+		platforms: PlatformService[],
 		private readonly workspace: WorkspaceService,
-	) {}
+	) {
+		this.platforms = new Map(platforms.map(p => [p.type, p]));
+	}
+
+	private getPlatform(type: PlatformType): PlatformService {
+		const platform = this.platforms.get(type);
+		if (!platform) {
+			throw new Error(`No ${type} provider configured`);
+		}
+		return platform;
+	}
+
+	private async getPlatformForRepo(repoPath: string): Promise<{ platform: PlatformService; type: PlatformType } | null> {
+		const remoteUrl = await this.git.getRemoteUrl(repoPath);
+		if (!remoteUrl) { return null; }
+		const type = detectPlatform(remoteUrl);
+		return { platform: this.getPlatform(type), type };
+	}
 
 	private getNotificationConfig(): NotificationConfig {
 		const config = vscode.workspace.getConfiguration('multirepoStudio.notificationTemplate');
@@ -172,16 +191,28 @@ export class ChangeSetService {
 			return;
 		}
 
-		const token = await this.gitLab.getToken();
-		if (!token) {
-			const action = await vscode.window.showWarningMessage(
-				'GitLab token not configured.',
-				'Configure Token',
-			);
-			if (action === 'Configure Token') {
-				await this.gitLab.configureToken();
+		const platformsNeeded = new Set<PlatformType>();
+		for (const repo of repos) {
+			const remoteUrl = await this.git.getRemoteUrl(repo.path);
+			if (remoteUrl) {
+				platformsNeeded.add(detectPlatform(remoteUrl));
 			}
-			return;
+		}
+
+		for (const type of platformsNeeded) {
+			const platform = this.getPlatform(type);
+			const token = await platform.getToken();
+			if (!token) {
+				const label = type === 'github' ? 'GitHub' : 'GitLab';
+				const action = await vscode.window.showWarningMessage(
+					`${label} token not configured.`,
+					`Configure ${label} Token`,
+				);
+				if (action) {
+					await platform.configureToken();
+				}
+				return;
+			}
 		}
 
 		const dirtyRepos = await this.getDirtyRepos(repos);
@@ -190,7 +221,6 @@ export class ChangeSetService {
 			return;
 		}
 
-		// Check if dirty repos are already on a feature branch
 		const onFeatureBranch: { repo: RepoInfo; branch: string }[] = [];
 		const onDefaultBranch: RepoInfo[] = [];
 
@@ -203,13 +233,11 @@ export class ChangeSetService {
 			}
 		}
 
-		// All dirty repos are on feature branches → push to existing
 		if (onFeatureBranch.length > 0 && onDefaultBranch.length === 0) {
 			await this.pushToExisting(onFeatureBranch);
 			return;
 		}
 
-		// Mix of feature branches and default branches → let user choose
 		if (onFeatureBranch.length > 0 && onDefaultBranch.length > 0) {
 			const featureNames = onFeatureBranch.map(r => `${r.repo.name} (${r.branch})`).join(', ');
 			const defaultNames = onDefaultBranch.map(r => r.name).join(', ');
@@ -241,7 +269,6 @@ export class ChangeSetService {
 			}
 		}
 
-		// All on default branch (or user chose "new") → create new Change Set
 		const changeSet = await this.promptChangeSet(dirtyRepos);
 		if (!changeSet) { return; }
 
@@ -334,7 +361,7 @@ export class ChangeSetService {
 		await vscode.window.withProgress(
 			{
 				location: vscode.ProgressLocation.Notification,
-				title: 'Retrying MR creation',
+				title: 'Retrying MR/PR creation',
 				cancellable: false,
 			},
 			async (progress) => {
@@ -347,18 +374,21 @@ export class ChangeSetService {
 						return;
 					}
 
+					const type = detectPlatform(remoteUrl);
+					const platform = this.getPlatform(type);
+
 					try {
-						const mr = await this.gitLab.createMergeRequest(
+						const pr = await platform.createPullRequest(
 							remoteUrl,
 							changeSet.branchName,
 							changeSet.targetBranch,
 							changeSet.mrTitle,
 							changeSet.mrDescription,
 						);
-						results.push({ repo: prev.repo, status: 'success', mrUrl: mr.web_url, mrIid: mr.iid });
+						results.push({ repo: prev.repo, status: 'success', mrUrl: pr.url, mrIid: pr.id, platform: type });
 					} catch (err) {
 						const message = err instanceof Error ? err.message : String(err);
-						results.push({ repo: prev.repo, status: 'pushed_mr_failed', error: message });
+						results.push({ repo: prev.repo, status: 'pushed_mr_failed', platform: type, error: message });
 					}
 				});
 
@@ -418,8 +448,8 @@ export class ChangeSetService {
 		if (!commitMessage) { return undefined; }
 
 		const mrDescription = await vscode.window.showInputBox({
-			title: `Change Set — MR Description (${++step}/${totalSteps})`,
-			prompt: 'Merge Request description for GitLab (optional)',
+			title: `Change Set — Description (${++step}/${totalSteps})`,
+			prompt: 'Pull/Merge Request description (optional)',
 			placeHolder: 'Describe the change...',
 			ignoreFocusOut: true,
 		});
@@ -427,7 +457,7 @@ export class ChangeSetService {
 
 		const targetBranch = await vscode.window.showInputBox({
 			title: `Change Set — Target Branch (${++step}/${totalSteps})`,
-			prompt: 'Target branch for the Merge Requests',
+			prompt: 'Target branch for the Pull/Merge Requests',
 			value: 'main',
 			ignoreFocusOut: true,
 		});
@@ -566,21 +596,24 @@ export class ChangeSetService {
 
 		const remoteUrl = await this.git.getRemoteUrl(repo.path);
 		if (!remoteUrl) {
-			return { repo, status: 'pushed_mr_failed', error: 'Pushed OK but no remote URL — cannot create MR' };
+			return { repo, status: 'pushed_mr_failed', error: 'Pushed OK but no remote URL — cannot create MR/PR' };
 		}
 
+		const type = detectPlatform(remoteUrl);
+		const platform = this.getPlatform(type);
+
 		try {
-			const mr = await this.gitLab.createMergeRequest(
+			const pr = await platform.createPullRequest(
 				remoteUrl,
 				changeSet.branchName,
 				changeSet.targetBranch,
 				changeSet.mrTitle,
 				changeSet.mrDescription,
 			);
-			return { repo, status: 'success', mrUrl: mr.web_url, mrIid: mr.iid };
+			return { repo, status: 'success', mrUrl: pr.url, mrIid: pr.id, platform: type };
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
-			return { repo, status: 'pushed_mr_failed', error: `Pushed OK but MR failed: ${msg}` };
+			return { repo, status: 'pushed_mr_failed', platform: type, error: `Pushed OK but MR/PR failed: ${msg}` };
 		}
 	}
 
@@ -590,17 +623,19 @@ export class ChangeSetService {
 		const gitFailed = results.filter(r => r.status === 'git_failed');
 		const blocked = results.filter(r => r.status === 'blocked');
 
+		const prLabel = (r: RepoResult) => r.platform === 'github' ? 'PR' : 'MR';
+
 		const lines: string[] = [`Change Set: ${changeSet.mrTitle}`, ''];
 
 		if (succeeded.length > 0) {
 			lines.push(`✓ ${succeeded.length} fully succeeded:`);
 			for (const r of succeeded) {
-				lines.push(`  ${r.repo.name} — MR !${r.mrIid} → ${r.mrUrl}`);
+				lines.push(`  ${r.repo.name} — ${prLabel(r)} #${r.mrIid} → ${r.mrUrl}`);
 			}
 		}
 
 		if (pushedButMrFailed.length > 0) {
-			lines.push('', `⚠ ${pushedButMrFailed.length} pushed but MR creation failed:`);
+			lines.push('', `⚠ ${pushedButMrFailed.length} pushed but ${prLabel(pushedButMrFailed[0])} creation failed:`);
 			for (const r of pushedButMrFailed) {
 				lines.push(`  ${r.repo.name} — ${r.error}`);
 			}
@@ -650,10 +685,10 @@ export class ChangeSetService {
 
 		if (pushedButMrFailed.length > 0) {
 			vscode.window.showWarningMessage(
-				`${succeeded.length} MR(s) created, ${pushedButMrFailed.length} pushed but MR failed.`,
-				'Retry MR Creation',
+				`${succeeded.length} MR/PR(s) created, ${pushedButMrFailed.length} pushed but MR/PR failed.`,
+				'Retry',
 			).then(action => {
-				if (action === 'Retry MR Creation') {
+				if (action === 'Retry') {
 					this.retryFailedMergeRequests();
 				}
 			});
@@ -668,8 +703,8 @@ export class ChangeSetService {
 				}
 			}
 			const msg = notifConfig.enabled
-				? `Change Set published: ${succeeded.length} MR(s) created. Message copied to clipboard.`
-				: `Change Set published: ${succeeded.length} MR(s) created. Links in Output panel.`;
+				? `Change Set published: ${succeeded.length} MR/PR(s) created. Message copied to clipboard.`
+				: `Change Set published: ${succeeded.length} MR/PR(s) created. Links in Output panel.`;
 			vscode.window.showInformationMessage(msg);
 		}
 	}
