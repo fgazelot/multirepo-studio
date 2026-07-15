@@ -85,6 +85,12 @@
         "icon": "$(key)"
       },
       {
+        "command": "multirepoStudio.discardChanges",
+        "title": "Discard All Changes",
+        "category": "MultiRepo Studio",
+        "icon": "$(discard)"
+      },
+      {
         "command": "multirepoStudio.searchAndReplace",
         "title": "Search & Replace Across Repos",
         "category": "MultiRepo Studio",
