@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0 (2026-07-16)
+
+- **Draft MR/PR**: option in Change Set form to create draft/WIP merge requests (GitHub `draft` field, GitLab `Draft:` prefix)
+- **Post-publish Dashboard**: WebView opens automatically after publishing, showing MR/PR state (open/merged/closed) and pipeline/checks status with auto-refresh every 15 seconds
+- **Smart Retry**: select which repos to retry, transient errors (429, 5xx, network) auto-retried with exponential backoff (up to 3 attempts)
+- **Change Set History**: last 20 published Change Sets are persisted — browse and reopen any past dashboard
+- New commands: **Open Dashboard**, **Change Set History**
+- **Discard All Changes**: discard uncommitted changes or save them to a new branch first
+
 ## 0.2.0 (2026-07-15)
 
 - **GitHub support**: create Pull Requests on GitHub repositories alongside GitLab Merge Requests

@@ -43,10 +43,23 @@ Configure a message template that gets copied to your clipboard after publishing
 
 Find a variable, version, or any string across all your repositories. See exactly where it appears (repo, file, line), then replace it everywhere with one confirmation. The modified files are ready for **Publish Change Set**.
 
+### Draft MR/PR
+
+Create merge requests as drafts (work-in-progress) directly from the Change Set form. Drafts are not mergeable until marked ready — useful for early feedback or WIP changes.
+
+### Post-publish Dashboard
+
+After publishing, a live dashboard opens showing the status of all your MR/PRs: state (open, merged, closed), pipeline/checks (running, passed, failed). Auto-refreshes every 15 seconds — no need to open multiple browser tabs.
+
+### Change Set History
+
+Browse your last 20 published Change Sets. Select any past Change Set to reopen its dashboard with live status polling.
+
 ### Error Handling
 
 - Distinguishes between git failures and PR/MR creation failures
-- Retry PR/MR creation without re-pushing
+- Smart retry with repo selection and error classification (transient vs permanent)
+- Transient errors (429, 5xx, network) auto-retried with exponential backoff
 - Automatic stash on branch switch
 - Pre-publish safety checks (conflicts, rebase, detached HEAD)
 
@@ -77,7 +90,10 @@ Tokens are stored securely in your OS keychain via VS Code's SecretStorage API.
 | **Refresh Repositories** | Manually refresh the repository list |
 | **Configure GitHub Token** | Store your GitHub PAT securely |
 | **Configure GitLab Token** | Store your GitLab PAT securely |
-| **Retry Failed Merge Requests** | Retry PR/MR creation for repos that were pushed but PR/MR failed |
+| **Discard All Changes** | Discard uncommitted changes or save to a new branch |
+| **Open Dashboard** | Reopen the post-publish dashboard for the latest Change Set |
+| **Change Set History** | Browse past Change Sets and reopen their dashboard |
+| **Retry Failed Merge Requests** | Retry PR/MR creation with repo selection and smart backoff |
 
 ## Settings
 
@@ -117,12 +133,12 @@ Nombre de relecture :white_check_mark: : {reviewCount}
 
 - [x] GitHub support
 - [x] Search & Replace across repos
-- [ ] MR/PR dashboard with pipeline status
-- [ ] Draft Pull/Merge Requests
-- [ ] Automatic reviewers
-- [ ] Labels
-- [ ] Change Set history
+- [x] MR/PR dashboard with pipeline status
+- [x] Draft Pull/Merge Requests
+- [x] Smart retry with error classification
+- [x] Change Set history
 - [ ] Bitbucket support
+- [ ] CLI companion
 
 ## Support
 
