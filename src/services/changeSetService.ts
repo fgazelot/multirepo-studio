@@ -364,8 +364,26 @@ export class ChangeSetService {
 		}
 
 		const changeSet = this.lastChangeSet;
-		const toRetry = this.lastFailedMrResults;
-		this.lastFailedMrResults = [];
+		const failed = this.lastFailedMrResults;
+
+		const items = failed.map(r => ({
+			label: `${r.repo.group ? r.repo.group + '/' : ''}${r.repo.name}`,
+			description: this.isTransientError(r.error || '') ? '(transient — will auto-retry)' : '(permanent error)',
+			detail: r.error || 'Unknown error',
+			picked: true,
+			result: r,
+		}));
+
+		const selected = await vscode.window.showQuickPick(items, {
+			title: `Retry failed MR/PRs (${failed.length} failed)`,
+			placeHolder: 'Uncheck repos you don\'t want to retry',
+			canPickMany: true,
+		});
+
+		if (!selected || selected.length === 0) { return; }
+
+		const toRetry = selected.map(s => s.result);
+		this.lastFailedMrResults = failed.filter(r => !toRetry.includes(r));
 
 		const results: RepoResult[] = [];
 
@@ -389,20 +407,10 @@ export class ChangeSetService {
 					const platform = this.getPlatform(type);
 					const targetBranch = changeSet.targetBranchOverride || await this.git.getDefaultBranch(prev.repo.path);
 
-					try {
-						const pr = await platform.createPullRequest(
-							remoteUrl,
-							changeSet.branchName,
-							targetBranch,
-							changeSet.mrTitle,
-							changeSet.mrDescription,
-							changeSet.isDraft,
-						);
-						results.push({ repo: prev.repo, status: 'success', mrUrl: pr.url, mrIid: pr.id, platform: type });
-					} catch (err) {
-						const message = err instanceof Error ? err.message : String(err);
-						results.push({ repo: prev.repo, status: 'pushed_mr_failed', platform: type, error: message });
-					}
+					const result = await this.createMrWithRetry(
+						platform, type, remoteUrl, prev.repo, changeSet, targetBranch,
+					);
+					results.push(result);
 				});
 
 				await Promise.all(tasks);
@@ -410,6 +418,43 @@ export class ChangeSetService {
 		);
 
 		this.showResults(results, changeSet);
+	}
+
+	private isTransientError(error: string): boolean {
+		return /\b(429|5\d{2}|ECONNRESET|ETIMEDOUT|ENOTFOUND|socket hang up|rate limit)/i.test(error);
+	}
+
+	private async createMrWithRetry(
+		platform: PlatformService,
+		type: PlatformType,
+		remoteUrl: string,
+		repo: RepoInfo,
+		changeSet: ChangeSet,
+		targetBranch: string,
+		maxAttempts = 3,
+	): Promise<RepoResult> {
+		for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+			try {
+				const pr = await platform.createPullRequest(
+					remoteUrl,
+					changeSet.branchName,
+					targetBranch,
+					changeSet.mrTitle,
+					changeSet.mrDescription,
+					changeSet.isDraft,
+				);
+				return { repo, status: 'success', mrUrl: pr.url, mrIid: pr.id, platform: type };
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err);
+				if (attempt < maxAttempts && this.isTransientError(message)) {
+					const delay = 1000 * Math.pow(2, attempt - 1);
+					await new Promise(resolve => setTimeout(resolve, delay));
+					continue;
+				}
+				return { repo, status: 'pushed_mr_failed', platform: type, error: message };
+			}
+		}
+		return { repo, status: 'pushed_mr_failed', platform: type, error: 'Max retries exceeded' };
 	}
 
 	private async getDirtyRepos(repos: RepoInfo[]): Promise<RepoInfo[]> {
@@ -633,20 +678,11 @@ export class ChangeSetService {
 		const platform = this.getPlatform(type);
 		const targetBranch = changeSet.targetBranchOverride || await this.git.getDefaultBranch(repo.path);
 
-		try {
-			const pr = await platform.createPullRequest(
-				remoteUrl,
-				changeSet.branchName,
-				targetBranch,
-				changeSet.mrTitle,
-				changeSet.mrDescription,
-				changeSet.isDraft,
-			);
-			return { repo, status: 'success', mrUrl: pr.url, mrIid: pr.id, platform: type };
-		} catch (err) {
-			const msg = err instanceof Error ? err.message : String(err);
-			return { repo, status: 'pushed_mr_failed', platform: type, error: `Pushed OK but MR/PR failed: ${msg}` };
+		const result = await this.createMrWithRetry(platform, type, remoteUrl, repo, changeSet, targetBranch);
+		if (result.status === 'pushed_mr_failed') {
+			result.error = `Pushed OK but MR/PR failed: ${result.error}`;
 		}
+		return result;
 	}
 
 	private showResults(results: RepoResult[], changeSet: ChangeSet): void {
