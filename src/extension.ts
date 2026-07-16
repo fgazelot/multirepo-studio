@@ -13,7 +13,7 @@ export function activate(context: vscode.ExtensionContext) {
 	const gitService = new GitService();
 	const gitLabService = new GitLabService(context);
 	const gitHubService = new GitHubService(context);
-	const changeSetService = new ChangeSetService(gitService, [gitLabService, gitHubService], workspaceService);
+	const changeSetService = new ChangeSetService(gitService, [gitLabService, gitHubService], workspaceService, context);
 	const searchService = new SearchService();
 
 	const treeProvider = new RepositoryTreeProvider(workspaceService, gitService);
@@ -77,6 +77,10 @@ export function activate(context: vscode.ExtensionContext) {
 
 		vscode.commands.registerCommand('multirepoStudio.openDashboard', () => {
 			changeSetService.openDashboard();
+		}),
+
+		vscode.commands.registerCommand('multirepoStudio.showHistory', () => {
+			changeSetService.showHistory();
 		}),
 
 		vscode.commands.registerCommand('multirepoStudio.retryFailedMRs', () => {

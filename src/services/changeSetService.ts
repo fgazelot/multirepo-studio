@@ -38,6 +38,16 @@ interface RepoResult {
 }
 
 const DEFAULT_BRANCHES = ['main', 'master', 'develop'];
+const HISTORY_KEY = 'multirepoStudio.changeSetHistory';
+const MAX_HISTORY = 20;
+
+export interface ChangeSetHistoryEntry {
+	title: string;
+	branchName: string;
+	isDraft: boolean;
+	publishedAt: string;
+	repos: DashboardEntry[];
+}
 
 export class ChangeSetService {
 	private lastFailedMrResults: RepoResult[] = [];
@@ -49,8 +59,51 @@ export class ChangeSetService {
 		private readonly git: GitService,
 		platforms: PlatformService[],
 		private readonly workspace: WorkspaceService,
+		private readonly context: vscode.ExtensionContext,
 	) {
 		this.platforms = new Map(platforms.map(p => [p.type, p]));
+	}
+
+	private getHistory(): ChangeSetHistoryEntry[] {
+		return this.context.workspaceState.get<ChangeSetHistoryEntry[]>(HISTORY_KEY, []);
+	}
+
+	private async saveToHistory(entry: ChangeSetHistoryEntry): Promise<void> {
+		const history = this.getHistory();
+		history.unshift(entry);
+		if (history.length > MAX_HISTORY) { history.length = MAX_HISTORY; }
+		await this.context.workspaceState.update(HISTORY_KEY, history);
+	}
+
+	async showHistory(): Promise<void> {
+		const history = this.getHistory();
+		if (history.length === 0) {
+			vscode.window.showInformationMessage('No Change Set history yet.');
+			return;
+		}
+
+		const items = history.map((entry, index) => {
+			const date = new Date(entry.publishedAt);
+			const dateStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+			const repoCount = entry.repos.length;
+			const draftTag = entry.isDraft ? ' [Draft]' : '';
+			return {
+				label: `${entry.title}${draftTag}`,
+				description: `${entry.branchName} — ${repoCount} repo(s)`,
+				detail: `${dateStr} — ${entry.repos.map(r => r.repoName).join(', ')}`,
+				index,
+			};
+		});
+
+		const selected = await vscode.window.showQuickPick(items, {
+			title: `Change Set History (${history.length})`,
+			placeHolder: 'Select a Change Set to open its dashboard',
+		});
+
+		if (!selected) { return; }
+
+		const entry = history[selected.index];
+		DashboardPanel.open(this.platforms, this.git, entry.repos);
 	}
 
 	private getPlatform(type: PlatformType): PlatformService {
@@ -763,6 +816,13 @@ export class ChangeSetService {
 				isDraft: changeSet.isDraft,
 			}));
 			DashboardPanel.open(this.platforms, this.git, this.lastDashboardEntries);
+			this.saveToHistory({
+				title: changeSet.mrTitle,
+				branchName: changeSet.branchName,
+				isDraft: changeSet.isDraft,
+				publishedAt: new Date().toISOString(),
+				repos: this.lastDashboardEntries,
+			});
 		}
 
 		if (pushedButMrFailed.length > 0) {
