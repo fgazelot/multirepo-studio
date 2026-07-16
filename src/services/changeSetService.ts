@@ -656,6 +656,39 @@ export class ChangeSetService {
 	}
 
 	private async executePublish(repos: RepoInfo[], changeSet: ChangeSet): Promise<void> {
+		const reposWithExistingBranch: RepoInfo[] = [];
+		for (const repo of repos) {
+			if (await this.git.branchExists(repo.path, changeSet.branchName)) {
+				reposWithExistingBranch.push(repo);
+			}
+		}
+
+		let deleteBranches = false;
+		if (reposWithExistingBranch.length > 0) {
+			const names = reposWithExistingBranch.map(r => r.name).join(', ');
+			const choice = await vscode.window.showQuickPick(
+				[
+					{
+						label: '$(trash) Delete and recreate',
+						description: `Delete branch "${changeSet.branchName}" in ${reposWithExistingBranch.length} repo(s)`,
+						value: 'delete' as const,
+					},
+					{
+						label: '$(close) Skip these repos',
+						description: 'Only publish to repos without the branch',
+						value: 'skip' as const,
+					},
+				],
+				{
+					title: `Branch "${changeSet.branchName}" already exists in: ${names}`,
+					placeHolder: 'How should we handle existing branches?',
+				},
+			);
+
+			if (!choice) { return; }
+			deleteBranches = choice.value === 'delete';
+		}
+
 		const results: RepoResult[] = [];
 
 		await vscode.window.withProgress(
@@ -673,7 +706,7 @@ export class ChangeSetService {
 						increment: 100 / total,
 					});
 
-					const result = await this.publishToRepo(repo, changeSet);
+					const result = await this.publishToRepo(repo, changeSet, deleteBranches);
 					results.push(result);
 				});
 
@@ -685,7 +718,7 @@ export class ChangeSetService {
 		this.showResults(results, changeSet);
 	}
 
-	private async publishToRepo(repo: RepoInfo, changeSet: ChangeSet): Promise<RepoResult> {
+	private async publishToRepo(repo: RepoInfo, changeSet: ChangeSet, deleteBranches = false): Promise<RepoResult> {
 		const status = await this.git.getStatus(repo.path);
 
 		if (status.hasConflicts) {
@@ -699,11 +732,25 @@ export class ChangeSetService {
 		}
 
 		const branchExists = await this.git.branchExists(repo.path, changeSet.branchName);
-		if (branchExists) {
+		if (branchExists && !deleteBranches) {
 			return { repo, status: 'blocked', error: `Branch "${changeSet.branchName}" already exists` };
 		}
 
 		const originalBranch = status.branch;
+
+		if (branchExists) {
+			try {
+				await this.git.deleteRemoteBranch(repo.path, changeSet.branchName);
+				if (status.branch === changeSet.branchName) {
+					const defaultBranch = await this.git.getDefaultBranch(repo.path);
+					await this.git.switchBack(repo.path, defaultBranch);
+				}
+				await this.git.deleteBranch(repo.path, changeSet.branchName);
+			} catch (err) {
+				const msg = err instanceof Error ? err.message : String(err);
+				return { repo, status: 'git_failed', error: `Failed to delete existing branch: ${msg}` };
+			}
+		}
 
 		try {
 			await this.git.switchCreateBranch(repo.path, changeSet.branchName);

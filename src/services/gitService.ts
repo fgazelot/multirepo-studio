@@ -100,6 +100,14 @@ export class GitService {
 		}
 	}
 
+	async deleteBranch(repoPath: string, branchName: string): Promise<void> {
+		await this.git(repoPath, 'branch', '-D', branchName);
+	}
+
+	async deleteRemoteBranch(repoPath: string, branchName: string): Promise<void> {
+		await this.git(repoPath, 'push', 'origin', '--delete', branchName).catch(() => {});
+	}
+
 	async getDefaultBranch(repoPath: string): Promise<string> {
 		try {
 			const ref = await this.git(repoPath, 'symbolic-ref', 'refs/remotes/origin/HEAD');

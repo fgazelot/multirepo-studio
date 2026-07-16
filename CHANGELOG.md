@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1 (2026-07-16)
+
+- **Branch conflict handling**: when a branch already exists, offers to delete and recreate or skip — no more blocked repos
+
 ## 0.3.0 (2026-07-16)
 
 - **Draft MR/PR**: option in Change Set form to create draft/WIP merge requests (GitHub `draft` field, GitLab `Draft:` prefix)
