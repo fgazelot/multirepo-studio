@@ -75,6 +75,10 @@ export function activate(context: vscode.ExtensionContext) {
 			gitHubService.configureToken();
 		}),
 
+		vscode.commands.registerCommand('multirepoStudio.openDashboard', () => {
+			changeSetService.openDashboard();
+		}),
+
 		vscode.commands.registerCommand('multirepoStudio.retryFailedMRs', () => {
 			changeSetService.retryFailedMergeRequests();
 		}),

@@ -1,10 +1,18 @@
 import * as vscode from 'vscode';
-import { PlatformService, PullRequestResponse, parseRemoteUrl, httpRequest } from './platformService';
+import { PlatformService, PullRequestResponse, MRStatusResponse, PipelineStatus, MRState, parseRemoteUrl, httpRequest } from './platformService';
 
 interface GitHubPRResponse {
 	number: number;
 	html_url: string;
 	title: string;
+	state: string;
+	draft: boolean;
+	head: { sha: string };
+}
+
+interface GitHubCheckRunsResponse {
+	total_count: number;
+	check_runs: { status: string; conclusion: string | null }[];
 }
 
 export class GitHubService implements PlatformService {
@@ -37,6 +45,7 @@ export class GitHubService implements PlatformService {
 		targetBranch: string,
 		title: string,
 		description: string,
+		draft?: boolean,
 	): Promise<PullRequestResponse> {
 		const token = await this.getToken();
 		if (!token) {
@@ -55,6 +64,7 @@ export class GitHubService implements PlatformService {
 			base: targetBranch,
 			title,
 			body: description,
+			draft: draft || false,
 		});
 
 		const response = await httpRequest<GitHubPRResponse>(
@@ -75,6 +85,72 @@ export class GitHubService implements PlatformService {
 			id: response.number,
 			url: response.html_url,
 			title: response.title,
+		};
+	}
+
+	private get headers(): Record<string, string> {
+		return {
+			'Content-Type': 'application/json',
+			'Accept': 'application/vnd.github+json',
+			'User-Agent': 'MultiRepo-Studio-VSCode',
+			'X-GitHub-Api-Version': '2022-11-28',
+		};
+	}
+
+	async getMergeRequestStatus(remoteUrl: string, mrId: number): Promise<MRStatusResponse> {
+		const token = await this.getToken();
+		if (!token) {
+			throw new Error('GitHub token not configured.');
+		}
+
+		const project = parseRemoteUrl(remoteUrl);
+		if (!project) {
+			throw new Error(`Cannot parse GitHub remote URL: ${remoteUrl}`);
+		}
+
+		const pr = await httpRequest<GitHubPRResponse>(
+			'api.github.com',
+			`/repos/${project.projectPath}/pulls/${mrId}`,
+			'GET',
+			{ ...this.headers, 'Authorization': `Bearer ${token}` },
+		);
+
+		let pipelineStatus: PipelineStatus = 'unknown';
+		let pipelineUrl: string | undefined;
+
+		try {
+			const checks = await httpRequest<GitHubCheckRunsResponse>(
+				'api.github.com',
+				`/repos/${project.projectPath}/commits/${pr.head.sha}/check-runs`,
+				'GET',
+				{ ...this.headers, 'Authorization': `Bearer ${token}` },
+			);
+
+			if (checks.total_count > 0) {
+				const runs = checks.check_runs;
+				const anyRunning = runs.some(r => r.status !== 'completed');
+				const anyFailed = runs.some(r => r.conclusion === 'failure' || r.conclusion === 'cancelled');
+				const allSuccess = runs.every(r => r.conclusion === 'success' || r.conclusion === 'skipped' || r.conclusion === 'neutral');
+
+				if (anyRunning) { pipelineStatus = 'running'; }
+				else if (anyFailed) { pipelineStatus = 'failed'; }
+				else if (allSuccess) { pipelineStatus = 'passed'; }
+
+				pipelineUrl = `${pr.html_url}/checks`;
+			}
+		} catch {
+			pipelineStatus = 'unknown';
+		}
+
+		const state: MRState = pr.state === 'closed' ? 'closed' : 'open';
+
+		return {
+			mrId: pr.number,
+			mrUrl: pr.html_url,
+			mrTitle: pr.title,
+			state,
+			isDraft: pr.draft,
+			pipeline: { status: pipelineStatus, url: pipelineUrl },
 		};
 	}
 }

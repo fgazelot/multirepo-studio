@@ -8,6 +8,21 @@ export interface PullRequestResponse {
 	title: string;
 }
 
+export type PipelineStatus = 'running' | 'passed' | 'failed' | 'pending' | 'cancelled' | 'unknown';
+export type MRState = 'open' | 'merged' | 'closed';
+
+export interface MRStatusResponse {
+	mrId: number;
+	mrUrl: string;
+	mrTitle: string;
+	state: MRState;
+	isDraft: boolean;
+	pipeline: {
+		status: PipelineStatus;
+		url?: string;
+	};
+}
+
 export type PlatformType = 'github' | 'gitlab';
 
 export interface PlatformService {
@@ -20,7 +35,12 @@ export interface PlatformService {
 		targetBranch: string,
 		title: string,
 		description: string,
+		draft?: boolean,
 	): Promise<PullRequestResponse>;
+	getMergeRequestStatus(
+		remoteUrl: string,
+		mrId: number,
+	): Promise<MRStatusResponse>;
 }
 
 interface RemoteProject {

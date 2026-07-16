@@ -97,6 +97,12 @@
         "icon": "$(search-replace)"
       },
       {
+        "command": "multirepoStudio.openDashboard",
+        "title": "Open Dashboard",
+        "category": "MultiRepo Studio",
+        "icon": "$(dashboard)"
+      },
+      {
         "command": "multirepoStudio.retryFailedMRs",
         "title": "Retry Failed Merge Requests",
         "category": "MultiRepo Studio",
