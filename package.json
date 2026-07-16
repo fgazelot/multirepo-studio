@@ -103,6 +103,12 @@
         "icon": "$(dashboard)"
       },
       {
+        "command": "multirepoStudio.showHistory",
+        "title": "Change Set History",
+        "category": "MultiRepo Studio",
+        "icon": "$(history)"
+      },
+      {
         "command": "multirepoStudio.retryFailedMRs",
         "title": "Retry Failed Merge Requests",
         "category": "MultiRepo Studio",
