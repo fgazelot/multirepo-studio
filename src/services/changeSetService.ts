@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { GitService } from './gitService';
 import { PlatformService, PlatformType, detectPlatform } from './platformService';
 import { WorkspaceService, RepoInfo } from './workspaceService';
+import { DashboardPanel, DashboardEntry } from './dashboardPanel';
 
 interface ChangeSet {
 	branchName: string;
@@ -9,6 +10,7 @@ interface ChangeSet {
 	mrTitle: string;
 	mrDescription: string;
 	targetBranchOverride: string | null;
+	isDraft: boolean;
 	notificationDescription: string;
 	reviewTime: string;
 	reviewCount: string;
@@ -40,6 +42,7 @@ const DEFAULT_BRANCHES = ['main', 'master', 'develop'];
 export class ChangeSetService {
 	private lastFailedMrResults: RepoResult[] = [];
 	private lastChangeSet: ChangeSet | undefined;
+	private lastDashboardEntries: DashboardEntry[] = [];
 	private platforms: Map<PlatformType, PlatformService>;
 
 	constructor(
@@ -76,6 +79,14 @@ export class ChangeSetService {
 			defaultReviewTime: config.get('defaultReviewTime', '5m'),
 			defaultReviewCount: config.get('defaultReviewCount', '1'),
 		};
+	}
+
+	openDashboard(): void {
+		if (this.lastDashboardEntries.length === 0) {
+			vscode.window.showInformationMessage('No Change Set published yet. Publish a Change Set first to see the dashboard.');
+			return;
+		}
+		DashboardPanel.open(this.platforms, this.git, this.lastDashboardEntries);
 	}
 
 	async switchAllToDefault(): Promise<void> {
@@ -385,6 +396,7 @@ export class ChangeSetService {
 							targetBranch,
 							changeSet.mrTitle,
 							changeSet.mrDescription,
+							changeSet.isDraft,
 						);
 						results.push({ repo: prev.repo, status: 'success', mrUrl: pr.url, mrIid: pr.id, platform: type });
 					} catch (err) {
@@ -415,7 +427,7 @@ export class ChangeSetService {
 		const repoNames = dirtyRepos.map(r => r.name).join(', ');
 		const notifConfig = this.getNotificationConfig();
 
-		const totalSteps = 5
+		const totalSteps = 6
 			+ (notifConfig.enabled ? 1 : 0)
 			+ (notifConfig.enabled && notifConfig.promptReviewTime ? 1 : 0)
 			+ (notifConfig.enabled && notifConfig.promptReviewCount ? 1 : 0);
@@ -465,6 +477,19 @@ export class ChangeSetService {
 		if (targetBranchInput === undefined) { return undefined; }
 		const targetBranchOverride = targetBranchInput === 'auto' || targetBranchInput === '' ? null : targetBranchInput;
 
+		const draftChoice = await vscode.window.showQuickPick(
+			[
+				{ label: '$(circle-slash) Ready for review', description: 'Create a regular MR/PR', value: false },
+				{ label: '$(edit) Draft', description: 'Mark as work-in-progress (not mergeable yet)', value: true },
+			],
+			{
+				title: `Change Set — Draft? (${++step}/${totalSteps})`,
+				placeHolder: 'Should this MR/PR be created as a draft?',
+			},
+		);
+		if (!draftChoice) { return undefined; }
+		const isDraft = draftChoice.value;
+
 		let notificationDescription = title;
 		let reviewTime = notifConfig.defaultReviewTime;
 		let reviewCount = notifConfig.defaultReviewCount;
@@ -510,6 +535,7 @@ export class ChangeSetService {
 			mrTitle: title,
 			mrDescription: mrDescription || title,
 			targetBranchOverride,
+			isDraft,
 			notificationDescription,
 			reviewTime,
 			reviewCount,
@@ -519,7 +545,8 @@ export class ChangeSetService {
 	private async confirmPublish(repos: RepoInfo[], changeSet: ChangeSet): Promise<boolean> {
 		const summary = repos.map(r => `  • ${r.name}`).join('\n');
 		const targetLabel = changeSet.targetBranchOverride || 'auto (per repo)';
-		const message = `Publish Change Set to ${repos.length} repo(s)?\n\n${summary}\n\nBranch: ${changeSet.branchName}\nTarget: ${targetLabel}`;
+		const draftLabel = changeSet.isDraft ? '\nMode: Draft (work-in-progress)' : '';
+		const message = `Publish Change Set to ${repos.length} repo(s)?\n\n${summary}\n\nBranch: ${changeSet.branchName}\nTarget: ${targetLabel}${draftLabel}`;
 
 		const result = await vscode.window.showInformationMessage(
 			message,
@@ -613,6 +640,7 @@ export class ChangeSetService {
 				targetBranch,
 				changeSet.mrTitle,
 				changeSet.mrDescription,
+				changeSet.isDraft,
 			);
 			return { repo, status: 'success', mrUrl: pr.url, mrIid: pr.id, platform: type };
 		} catch (err) {
@@ -628,8 +656,9 @@ export class ChangeSetService {
 		const blocked = results.filter(r => r.status === 'blocked');
 
 		const prLabel = (r: RepoResult) => r.platform === 'github' ? 'PR' : 'MR';
+		const draftTag = changeSet.isDraft ? ' [Draft]' : '';
 
-		const lines: string[] = [`Change Set: ${changeSet.mrTitle}`, ''];
+		const lines: string[] = [`Change Set: ${changeSet.mrTitle}${draftTag}`, ''];
 
 		if (succeeded.length > 0) {
 			lines.push(`✓ ${succeeded.length} fully succeeded:`);
@@ -686,6 +715,19 @@ export class ChangeSetService {
 		panel.show();
 
 		this.lastFailedMrResults = pushedButMrFailed;
+
+		if (succeeded.length > 0) {
+			this.lastDashboardEntries = succeeded.map(r => ({
+				repoName: r.repo.name,
+				group: r.repo.group,
+				repoPath: r.repo.path,
+				platform: r.platform!,
+				mrId: r.mrIid!,
+				mrUrl: r.mrUrl!,
+				isDraft: changeSet.isDraft,
+			}));
+			DashboardPanel.open(this.platforms, this.git, this.lastDashboardEntries);
+		}
 
 		if (pushedButMrFailed.length > 0) {
 			vscode.window.showWarningMessage(
