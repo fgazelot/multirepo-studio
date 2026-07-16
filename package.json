@@ -2,7 +2,7 @@
   "name": "multirepo-studio",
   "displayName": "MultiRepo Studio",
   "description": "Orchestrate cross-repository changes on GitHub and GitLab from a single VS Code workspace.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "fgazelot",
   "license": "MIT",
   "engines": {
